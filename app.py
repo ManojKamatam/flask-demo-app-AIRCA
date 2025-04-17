@@ -1,3 +1,6 @@
+# Add to the top of app.py
+from ddtrace import patch_all
+patch_all()
 from flask import Flask, request, jsonify, abort
 import time
 import random
@@ -17,6 +20,27 @@ from utils import (
     start_background_task,
     timed_function
 )
+# Add to the top of app.py
+from dynatrace.oneagent.sdk.python import OneAgentSDK
+
+# Initialize Dynatrace SDK after Flask app creation
+dynatrace_sdk = OneAgentSDK()
+
+# Optionally add custom request tracking 
+@app.before_request
+def before_request():
+    request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
+        url=request.url,
+        method=request.method,
+        headers=dict(request.headers)
+    )
+    request.dynatrace_tracer.start()
+
+@app.after_request
+def after_request(response):
+    if hasattr(request, 'dynatrace_tracer'):
+        request.dynatrace_tracer.end(response.status_code)
+    return response
 
 # Configure logging
 logging.basicConfig(
