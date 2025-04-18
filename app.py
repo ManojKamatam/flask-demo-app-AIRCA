@@ -1,6 +1,6 @@
 # Add to the top of app.py
-#from ddtrace import patch_all
-#patch_all()
+from ddtrace import patch_all
+patch_all()
 from flask import Flask, request, jsonify, abort
 import time
 import random
@@ -10,7 +10,7 @@ import os
 import redis
 from datetime import datetime
 from config import Config
-from database import db, get_products_with_category, slow_product_search, find_user_by_email, unsafe_raw_query
+from database import db, get_products_with_category_optimized, slow_product_search, find_user_by_email, unsafe_raw_query
 from models import User, Product, Category, Order, OrderItem
 from utils import (
     simulate_memory_leak, 
@@ -20,34 +20,13 @@ from utils import (
     start_background_task,
     timed_function
 )
-# Add to the top of app.py
-#from dynatrace.oneagent.sdk.python import OneAgentSDK
 
-# Initialize Dynatrace SDK after Flask app creation
-#dynatrace_sdk = OneAgentSDK()
-
-# Optionally add custom request tracking 
-#@app.before_request
-#def before_request():
-#   request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
-#      url=request.url,
-#     method=request.method,
-#    headers=dict(request.headers)
-# )
-#    request.dynatrace_tracer.start()
-#
-#@app.after_request
-#def after_request(response):
-#    if hasattr(request, 'dynatrace_tracer'):
-#        request.dynatrace_tracer.end(response.status_code)
-#    return response
-#
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -149,11 +128,11 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the optimized query function to avoid N+1 problem
+    products = get_products_with_category_optimized(limit)
     
-    # Occasional memory leak
-    simulate_memory_leak()
+    # Disable memory leak simulation
+    # simulate_memory_leak()
     
     return jsonify(products)
 
@@ -161,8 +140,9 @@ def get_products():
 def search_products():
     keyword = request.args.get('keyword', '')
     
-    # Use slow query if enabled in config
+    # Disable slow query if enabled in config
     if Config.SLOW_QUERY_ENABLED:
+        logger.warning("Slow query is enabled, but it is not recommended for production use.")
         products = slow_product_search(keyword)
     else:
         products = [p.to_dict() for p in Product.query.filter(Product.name.like(f'%{keyword}%')).all()]
@@ -193,18 +173,19 @@ def get_categories():
     categories = Category.query.all()
     return jsonify([category.to_dict() for category in categories])
 
-@app.route('/api/slow-endpoint', methods=['GET'])
-def slow_endpoint():
-    # Simulate slow API response
-    time.sleep(3)
-    
-    # Make a slow external API call
-    external_data = slow_external_api_call()
-    
-    return jsonify({
-        "message": "Slow endpoint response",
-        "external_data": external_data
-    })
+# Disable slow endpoint for performance
+# @app.route('/api/slow-endpoint', methods=['GET'])
+# def slow_endpoint():
+#     # Simulate slow API response
+#     time.sleep(3)
+#     
+#     # Make a slow external API call
+#     external_data = slow_external_api_call()
+#     
+#     return jsonify({
+#         "message": "Slow endpoint response",
+#         "external_data": external_data
+#     })
 
 @app.route('/api/cpu-intensive', methods=['GET'])
 def cpu_intensive():
