@@ -43,11 +43,11 @@ from utils import (
 #    return response
 #
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -118,13 +118,12 @@ def health_check():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    # Deliberate bug: Occasionally returns error for testing
-    if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
-    
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users])
+    try:
+        users = User.query.all()
+        return jsonify([user.to_dict() for user in users])
+    except Exception as e:
+        logger.error(f"Error in get_users endpoint: {str(e)}")
+        abort(500, description=str(e))
 
 @app.route('/api/users/<int:user_id>', methods=['GET'])
 def get_user(user_id):
@@ -173,8 +172,12 @@ def search_products():
 def unsafe_search():
     # Vulnerability: directly passing user input to SQL query
     keyword = request.args.get('keyword', '')
-    results = unsafe_raw_query(keyword)
-    return jsonify(results)
+    try:
+        results = unsafe_raw_query(keyword)
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in unsafe_search endpoint: {str(e)}")
+        abort(500, description=str(e))
 
 @app.route('/api/orders', methods=['GET'])
 def get_orders():
