@@ -1,10 +1,11 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 
 db = SQLAlchemy()
 
 # Deliberately inefficient query function that doesn't use joins
 def get_products_with_category(limit=None):
-    from models import Product
+    from models import Product, Category
     
     # This will cause N+1 query problem
     products = Product.query.limit(limit).all() if limit else Product.query.all()
@@ -45,10 +46,11 @@ def find_user_by_email(email):
 
 # Vulnerable to SQL injection (for demonstration only)
 def unsafe_raw_query(user_input):
-    from sqlalchemy import text
-    
-    # WARNING: This is deliberately unsafe!
-    query = text(f"SELECT * FROM product WHERE name LIKE '%{user_input}%'")
-    result = db.session.execute(query)
-    
-    return [dict(row._mapping) for row in result]
+    try:
+        # WARNING: This is deliberately unsafe!
+        query = text(f"SELECT * FROM product WHERE name LIKE '%{user_input}%'")
+        result = db.session.execute(query)
+        
+        return [dict(row._mapping) for row in result]
+    except Exception as e:
+        raise e
