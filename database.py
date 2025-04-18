@@ -1,19 +1,26 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import orm
 
 db = SQLAlchemy()
 
-# Deliberately inefficient query function that doesn't use joins
-def get_products_with_category(limit=None):
-    from models import Product
+# Optimized query function using joins
+def get_products_with_category_optimized(limit=None):
+    from models import Product, Category
     
-    # This will cause N+1 query problem
-    products = Product.query.limit(limit).all() if limit else Product.query.all()
+    query = (
+        db.session.query(Product, Category)
+        .outerjoin(Category, Product.category_id == Category.id)
+        .options(orm.contains_eager(Product.category))
+    )
+    
+    if limit:
+        query = query.limit(limit)
+    
+    products = query.all()
     
     result = []
-    for product in products:
+    for product, category in products:
         product_dict = product.to_dict()
-        # Causes additional query for each product
-        category = product.category
         if category:
             product_dict['category_name'] = category.name
         else:
@@ -38,7 +45,7 @@ def slow_product_search(keyword):
     
     return [p.to_dict() for p in products]
 
-# Missing index on user lookup
+# Add index on user email for faster lookup
 def find_user_by_email(email):
     from models import User
     return User.query.filter_by(email=email).first()
