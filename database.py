@@ -2,25 +2,12 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-# Deliberately inefficient query function that doesn't use joins
+# Optimized query function using join to avoid N+1 problem
 def get_products_with_category(limit=None):
     from models import Product
     
-    # This will cause N+1 query problem
-    products = Product.query.limit(limit).all() if limit else Product.query.all()
-    
-    result = []
-    for product in products:
-        product_dict = product.to_dict()
-        # Causes additional query for each product
-        category = product.category
-        if category:
-            product_dict['category_name'] = category.name
-        else:
-            product_dict['category_name'] = None
-        result.append(product_dict)
-    
-    return result
+    products = Product.query.options(db.joinedload('category')).limit(limit).all() if limit else Product.query.options(db.joinedload('category')).all()
+    return [p.to_dict() for p in products]
 
 # A slow query that doesn't use indexes properly
 def slow_product_search(keyword):
@@ -38,10 +25,10 @@ def slow_product_search(keyword):
     
     return [p.to_dict() for p in products]
 
-# Missing index on user lookup
+# Add index on user lookup
 def find_user_by_email(email):
     from models import User
-    return User.query.filter_by(email=email).first()
+    return User.query.filter(User.email == email).first()
 
 # Vulnerable to SQL injection (for demonstration only)
 def unsafe_raw_query(user_input):
