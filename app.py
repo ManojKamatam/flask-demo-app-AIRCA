@@ -43,11 +43,11 @@ from utils import (
 #    return response
 #
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -120,8 +120,12 @@ def health_check():
 def get_users():
     # Deliberate bug: Occasionally returns error for testing
     if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
+        try:
+            # Undefined variable use
+            return jsonify(user_list)  # This will fail with NameError
+        except NameError as e:
+            logger.error(f"Error in get_users: {str(e)}")
+            return jsonify({"error": str(e)}), 500
     
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])
