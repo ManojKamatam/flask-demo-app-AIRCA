@@ -1,15 +1,16 @@
 from database import db
 from datetime import datetime
+from sqlalchemy.orm import deferred
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<User {self.username}>'
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -20,17 +21,18 @@ class User(db.Model):
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(200), nullable=False, index=True)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Float, nullable=False)
     stock = db.Column(db.Integer, default=0)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<Product {self.name}>'
-    
+
     def to_dict(self):
+        category_name = self.category.name if self.category else None
         return {
             'id': self.id,
             'name': self.name,
@@ -38,17 +40,18 @@ class Product(db.Model):
             'price': self.price,
             'stock': self.stock,
             'category_id': self.category_id,
+            'category_name': category_name,
             'created_at': self.created_at.isoformat()
         }
 
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    products = db.relationship('Product', backref='category', lazy=True)
-    
+    products = db.relationship('Product', backref='category', lazy='joined')
+
     def __repr__(self):
         return f'<Category {self.name}>'
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -62,11 +65,11 @@ class Order(db.Model):
     total = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    items = db.relationship('OrderItem', backref='order', lazy=True)
-    
+    items = db.relationship('OrderItem', backref='order', lazy='joined')
+
     def __repr__(self):
         return f'<Order {self.id}>'
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -83,10 +86,10 @@ class OrderItem(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False)
-    
+
     def __repr__(self):
         return f'<OrderItem {self.id}>'
-    
+
     def to_dict(self):
         return {
             'id': self.id,
