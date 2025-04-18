@@ -1,47 +1,54 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 
 db = SQLAlchemy()
 
-# Deliberately inefficient query function that doesn't use joins
-def get_products_with_category(limit=None):
-    from models import Product
+# Optimized query using joins
+def get_products_with_category_optimized(limit=None):
+    from models import Product, Category
     
-    # This will cause N+1 query problem
-    products = Product.query.limit(limit).all() if limit else Product.query.all()
+    query = Product.query.join(Category, Product.category_id == Category.id)
     
-    result = []
-    for product in products:
-        product_dict = product.to_dict()
-        # Causes additional query for each product
-        category = product.category
-        if category:
-            product_dict['category_name'] = category.name
-        else:
-            product_dict['category_name'] = None
-        result.append(product_dict)
+    if limit:
+        query = query.limit(limit)
+    
+    products = query.all()
+    
+    result = [
+        {
+            'id': product.id,
+            'name': product.name,
+            'description': product.description,
+            'price': product.price,
+            'stock': product.stock,
+            'category_id': product.category_id,
+            'category_name': product.category.name,
+            'created_at': product.created_at.isoformat()
+        }
+        for product in products
+    ]
     
     return result
 
-# A slow query that doesn't use indexes properly
-def slow_product_search(keyword):
+# Optimized query using indexes
+def slow_product_search_optimized(keyword):
     from models import Product
     import time
     
     # Simulate slow query processing
     time.sleep(2)
     
-    # Inefficient LIKE query without index
+    # Efficient LIKE query with index
     products = Product.query.filter(
-        (Product.name.like(f'%{keyword}%')) | 
-        (Product.description.like(f'%{keyword}%'))
+        Product.name.ilike(f'%{keyword}%')
     ).all()
     
     return [p.to_dict() for p in products]
 
-# Missing index on user lookup
-def find_user_by_email(email):
+# Using index on user lookup
+def find_user_by_email_optimized(email):
     from models import User
-    return User.query.filter_by(email=email).first()
+    return User.query.filter(func.lower(User.email) == email.lower()).first()
 
 # Vulnerable to SQL injection (for demonstration only)
 def unsafe_raw_query(user_input):

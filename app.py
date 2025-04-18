@@ -10,7 +10,7 @@ import os
 import redis
 from datetime import datetime
 from config import Config
-from database import db, get_products_with_category, slow_product_search, find_user_by_email, unsafe_raw_query
+from database import db, get_products_with_category_optimized, slow_product_search_optimized, find_user_by_email_optimized, unsafe_raw_query
 from models import User, Product, Category, Order, OrderItem
 from utils import (
     simulate_memory_leak, 
@@ -139,7 +139,7 @@ def search_user_by_email():
     if not email:
         abort(400, description="Email parameter is required")
     
-    user = find_user_by_email(email)
+    user = find_user_by_email_optimized(email)
     if not user:
         abort(404, description="User not found")
     return jsonify(user.to_dict())
@@ -149,8 +149,8 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the optimized query function with joins
+    products = get_products_with_category_optimized(limit)
     
     # Occasional memory leak
     simulate_memory_leak()
@@ -161,9 +161,9 @@ def get_products():
 def search_products():
     keyword = request.args.get('keyword', '')
     
-    # Use slow query if enabled in config
+    # Use optimized query if enabled in config
     if Config.SLOW_QUERY_ENABLED:
-        products = slow_product_search(keyword)
+        products = slow_product_search_optimized(keyword)
     else:
         products = [p.to_dict() for p in Product.query.filter(Product.name.like(f'%{keyword}%')).all()]
     
