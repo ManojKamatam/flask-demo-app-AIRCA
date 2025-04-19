@@ -1,44 +1,42 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 
 db = SQLAlchemy()
 
-# Deliberately inefficient query function that doesn't use joins
+# Efficient query using SQL joins
 def get_products_with_category(limit=None):
-    from models import Product
+    from models import Product, Category
     
-    # This will cause N+1 query problem
-    products = Product.query.limit(limit).all() if limit else Product.query.all()
+    query = db.session.query(Product, Category) \
+                        .outerjoin(Category, Product.category_id == Category.id)
+    
+    if limit:
+        query = query.limit(limit)
+    
+    products = query.all()
     
     result = []
-    for product in products:
+    for product, category in products:
         product_dict = product.to_dict()
-        # Causes additional query for each product
-        category = product.category
-        if category:
-            product_dict['category_name'] = category.name
-        else:
-            product_dict['category_name'] = None
+        product_dict['category_name'] = category.name if category else None
         result.append(product_dict)
     
     return result
 
-# A slow query that doesn't use indexes properly
+# Query with proper indexing
 def slow_product_search(keyword):
     from models import Product
-    import time
     
-    # Simulate slow query processing
-    time.sleep(2)
-    
-    # Inefficient LIKE query without index
+    # Use SQL function for case-insensitive search
+    search_term = f'%{keyword}%'
     products = Product.query.filter(
-        (Product.name.like(f'%{keyword}%')) | 
-        (Product.description.like(f'%{keyword}%'))
+        func.lower(Product.name).like(func.lower(search_term)) |
+        func.lower(Product.description).like(func.lower(search_term))
     ).all()
     
     return [p.to_dict() for p in products]
 
-# Missing index on user lookup
+# Add index for email column
 def find_user_by_email(email):
     from models import User
     return User.query.filter_by(email=email).first()
