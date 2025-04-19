@@ -1,0 +1,11 @@
+# Add indexes for efficient queries
+from sqlalchemy import Index
+
+# ... (existing code) ...
+
+# Index on User.email column
+Index('idx_user_email', User.email)
+
+# Indexes on Product.name and Product.description columns
+Index('idx_product_name', Product.name)
+Index('idx_product_description', Product.description)
