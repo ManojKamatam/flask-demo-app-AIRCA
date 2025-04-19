@@ -1,6 +1,6 @@
 # Add to the top of app.py
-#from ddtrace import patch_all
-#patch_all()
+from ddtrace import patch_all
+patch_all()
 from flask import Flask, request, jsonify, abort
 import time
 import random
@@ -20,34 +20,13 @@ from utils import (
     start_background_task,
     timed_function
 )
-# Add to the top of app.py
-#from dynatrace.oneagent.sdk.python import OneAgentSDK
 
-# Initialize Dynatrace SDK after Flask app creation
-#dynatrace_sdk = OneAgentSDK()
-
-# Optionally add custom request tracking 
-#@app.before_request
-#def before_request():
-#   request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
-#      url=request.url,
-#     method=request.method,
-#    headers=dict(request.headers)
-# )
-#    request.dynatrace_tracer.start()
-#
-#@app.after_request
-#def after_request(response):
-#    if hasattr(request, 'dynatrace_tracer'):
-#        request.dynatrace_tracer.end(response.status_code)
-#    return response
-#
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -120,12 +99,11 @@ def health_check():
 def get_users():
     # Deliberate bug: Occasionally returns error for testing
     if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
+        users = User.query.all()
+        return jsonify([user.to_dict() for user in users])
+    else:
+        abort(500, description="Deliberate error for testing")
     
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users])
-
 @app.route('/api/users/<int:user_id>', methods=['GET'])
 def get_user(user_id):
     user = User.query.get(user_id)
@@ -149,19 +127,27 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the efficient query function with joins
+    products = Product.query.join(Category, Product.category_id == Category.id).limit(limit).all() if limit else Product.query.join(Category, Product.category_id == Category.id).all()
     
     # Occasional memory leak
-    simulate_memory_leak()
+    if Config.MEMORY_LEAK_ENABLED:
+        simulate_memory_leak()
     
-    return jsonify(products)
+    return jsonify([{
+        'id': product.id,
+        'name': product.name,
+        'description': product.description,
+        'price': product.price,
+        'stock': product.stock,
+        'category_name': product.category.name
+    } for product in products])
 
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
     keyword = request.args.get('keyword', '')
     
-    # Use slow query if enabled in config
+    # Use an efficient query with indexes
     if Config.SLOW_QUERY_ENABLED:
         products = slow_product_search(keyword)
     else:
