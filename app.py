@@ -1,10 +1,11 @@
 # Add to the top of app.py
-#from ddtrace import patch_all
-#patch_all()
+import logging
+from ddtrace import patch_all
+patch_all()
+
 from flask import Flask, request, jsonify, abort
 import time
 import random
-import logging
 import json
 import os
 import redis
@@ -20,34 +21,35 @@ from utils import (
     start_background_task,
     timed_function
 )
+
 # Add to the top of app.py
-#from dynatrace.oneagent.sdk.python import OneAgentSDK
+from dynatrace.oneagent.sdk.python import OneAgentSDK
 
 # Initialize Dynatrace SDK after Flask app creation
-#dynatrace_sdk = OneAgentSDK()
+dynatrace_sdk = OneAgentSDK()
 
-# Optionally add custom request tracking 
-#@app.before_request
-#def before_request():
-#   request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
-#      url=request.url,
-#     method=request.method,
-#    headers=dict(request.headers)
-# )
-#    request.dynatrace_tracer.start()
-#
-#@app.after_request
-#def after_request(response):
-#    if hasattr(request, 'dynatrace_tracer'):
-#        request.dynatrace_tracer.end(response.status_code)
-#    return response
-#
+# Add custom request tracking 
+@app.before_request
+def before_request():
+    request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
+        url=request.url,
+        method=request.method,
+        headers=dict(request.headers)
+    )
+    request.dynatrace_tracer.start()
+
+@app.after_request
+def after_request(response):
+    if hasattr(request, 'dynatrace_tracer'):
+        request.dynatrace_tracer.end(response.status_code)
+    return response
+
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -118,11 +120,6 @@ def health_check():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    # Deliberate bug: Occasionally returns error for testing
-    if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
-    
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])
 
@@ -149,8 +146,8 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the more efficient join query from the database module
+    products = db.get_products_with_category(limit)
     
     # Occasional memory leak
     simulate_memory_leak()
@@ -165,7 +162,7 @@ def search_products():
     if Config.SLOW_QUERY_ENABLED:
         products = slow_product_search(keyword)
     else:
-        products = [p.to_dict() for p in Product.query.filter(Product.name.like(f'%{keyword}%')).all()]
+        products = [p.to_dict() for p in Product.query.filter(Product.name.ilike(f'%{keyword}%')).all()]
     
     return jsonify(products)
 
@@ -173,6 +170,7 @@ def search_products():
 def unsafe_search():
     # Vulnerability: directly passing user input to SQL query
     keyword = request.args.get('keyword', '')
+    logger.warning("Unsafe raw query used with user input: %s", keyword)
     results = unsafe_raw_query(keyword)
     return jsonify(results)
 
