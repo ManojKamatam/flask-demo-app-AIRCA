@@ -28,10 +28,12 @@ def slow_external_api_call(endpoint="https://httpbin.org/delay/2"):
         response = requests.get(endpoint, timeout=timeout)
         return response.json()
     except requests.exceptions.Timeout:
-        # Swallowed exception - bad practice
+        # Handle timeout exception properly
+        logging.error("External API call timed out")
         return {"error": "Timeout"}
     except Exception as e:
-        # Generic exception catching - another bad practice
+        # Handle other exceptions properly
+        logging.error(f"Error calling external API: {str(e)}")
         return {"error": str(e)}
 
 def heavy_calculation(iterations=10**7):
@@ -50,8 +52,6 @@ def sometimes_fails(failure_rate=0.3):
             RuntimeError("Runtime exception occurred"),
             KeyError("Missing key in dictionary"),
             ZeroDivisionError("Division by zero"),
-            # Uncomment to see uncaught exceptions:
-            # Exception("Unhandled generic exception")
         ]
         raise random.choice(error_types)
     return "Function executed successfully"
