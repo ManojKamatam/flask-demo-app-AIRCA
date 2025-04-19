@@ -118,11 +118,6 @@ def health_check():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    # Deliberate bug: Occasionally returns error for testing
-    if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
-    
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])
 
