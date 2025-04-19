@@ -1,11 +1,12 @@
 import os
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class Config:
     DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'default-insecure-key')
+    SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(16))
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///app.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     API_TIMEOUT = int(os.environ.get('API_TIMEOUT', '5'))
