@@ -1,6 +1,6 @@
 # Add to the top of app.py
-#from ddtrace import patch_all
-#patch_all()
+from ddtrace import patch_all
+patch_all()
 from flask import Flask, request, jsonify, abort
 import time
 import random
@@ -10,7 +10,7 @@ import os
 import redis
 from datetime import datetime
 from config import Config
-from database import db, get_products_with_category, slow_product_search, find_user_by_email, unsafe_raw_query
+from database import db, get_products_with_category_optimized, product_search_optimized, find_user_by_email_indexed, safe_raw_query
 from models import User, Product, Category, Order, OrderItem
 from utils import (
     simulate_memory_leak, 
@@ -21,33 +21,33 @@ from utils import (
     timed_function
 )
 # Add to the top of app.py
-#from dynatrace.oneagent.sdk.python import OneAgentSDK
+from dynatrace.oneagent.sdk.python import OneAgentSDK
 
 # Initialize Dynatrace SDK after Flask app creation
-#dynatrace_sdk = OneAgentSDK()
+dynatrace_sdk = OneAgentSDK()
 
 # Optionally add custom request tracking 
-#@app.before_request
-#def before_request():
-#   request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
-#      url=request.url,
-#     method=request.method,
-#    headers=dict(request.headers)
-# )
-#    request.dynatrace_tracer.start()
-#
-#@app.after_request
-#def after_request(response):
-#    if hasattr(request, 'dynatrace_tracer'):
-#        request.dynatrace_tracer.end(response.status_code)
-#    return response
-#
+@app.before_request
+def before_request():
+    request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
+        url=request.url,
+        method=request.method,
+        headers=dict(request.headers)
+    )
+    request.dynatrace_tracer.start()
+
+@app.after_request
+def after_request(response):
+    if hasattr(request, 'dynatrace_tracer'):
+        request.dynatrace_tracer.end(response.status_code)
+    return response
+
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -118,11 +118,6 @@ def health_check():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    # Deliberate bug: Occasionally returns error for testing
-    if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
-    
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])
 
@@ -139,7 +134,7 @@ def search_user_by_email():
     if not email:
         abort(400, description="Email parameter is required")
     
-    user = find_user_by_email(email)
+    user = find_user_by_email_indexed(email)
     if not user:
         abort(404, description="User not found")
     return jsonify(user.to_dict())
@@ -149,8 +144,8 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the optimized query function to prevent N+1 problem
+    products = get_products_with_category_optimized(limit)
     
     # Occasional memory leak
     simulate_memory_leak()
@@ -161,19 +156,16 @@ def get_products():
 def search_products():
     keyword = request.args.get('keyword', '')
     
-    # Use slow query if enabled in config
-    if Config.SLOW_QUERY_ENABLED:
-        products = slow_product_search(keyword)
-    else:
-        products = [p.to_dict() for p in Product.query.filter(Product.name.like(f'%{keyword}%')).all()]
+    # Use optimized product search query
+    products = product_search_optimized(keyword)
     
     return jsonify(products)
 
 @app.route('/api/products/unsafe-search', methods=['GET'])
 def unsafe_search():
-    # Vulnerability: directly passing user input to SQL query
+    # Use safe raw query to prevent SQL injection
     keyword = request.args.get('keyword', '')
-    results = unsafe_raw_query(keyword)
+    results = safe_raw_query(keyword)
     return jsonify(results)
 
 @app.route('/api/orders', methods=['GET'])
@@ -198,8 +190,15 @@ def slow_endpoint():
     # Simulate slow API response
     time.sleep(3)
     
-    # Make a slow external API call
-    external_data = slow_external_api_call()
+    # Make a slow external API call with proper exception handling
+    try:
+        external_data = slow_external_api_call()
+    except requests.exceptions.Timeout:
+        logger.error("External API call timed out")
+        external_data = {"error": "Timeout"}
+    except Exception as e:
+        logger.error(f"Error in external API call: {str(e)}")
+        external_data = {"error": str(e)}
     
     return jsonify({
         "message": "Slow endpoint response",
