@@ -91,8 +91,8 @@ def create_sample_data():
     
     # Create sample users
     users = [
-        User(username="alice", email="alice@example.com"),
-        User(username="bob", email="bob@example.com")
+        User(username="alice", email="alice@example.com", password="password1"),
+        User(username="bob", email="bob@example.com", password="password2")
     ]
     db.session.add_all(users)
     db.session.commit()
