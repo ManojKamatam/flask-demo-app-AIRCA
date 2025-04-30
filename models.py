@@ -1,10 +1,11 @@
 from database import db
 from datetime import datetime
+from sqlalchemy.sql import func
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):
@@ -38,6 +39,7 @@ class Product(db.Model):
             'price': self.price,
             'stock': self.stock,
             'category_id': self.category_id,
+            'category_name': self.category.name if self.category else None,
             'created_at': self.created_at.isoformat()
         }
 

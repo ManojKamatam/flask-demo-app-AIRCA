@@ -1,6 +1,6 @@
 # Add to the top of app.py
-#from ddtrace import patch_all
-#patch_all()
+from ddtrace import patch_all
+patch_all()
 from flask import Flask, request, jsonify, abort
 import time
 import random
@@ -20,34 +20,13 @@ from utils import (
     start_background_task,
     timed_function
 )
-# Add to the top of app.py
-#from dynatrace.oneagent.sdk.python import OneAgentSDK
 
-# Initialize Dynatrace SDK after Flask app creation
-#dynatrace_sdk = OneAgentSDK()
-
-# Optionally add custom request tracking 
-#@app.before_request
-#def before_request():
-#   request.dynatrace_tracer = dynatrace_sdk.trace_incoming_web_request(
-#      url=request.url,
-#     method=request.method,
-#    headers=dict(request.headers)
-# )
-#    request.dynatrace_tracer.start()
-#
-#@app.after_request
-#def after_request(response):
-#    if hasattr(request, 'dynatrace_tracer'):
-#        request.dynatrace_tracer.end(response.status_code)
-#    return response
-#
 # Configure logging
-#logging.basicConfig(
-#    level=logging.INFO,
-#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-#)
-#logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -118,11 +97,6 @@ def health_check():
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
-    # Deliberate bug: Occasionally returns error for testing
-    if random.random() < 0.1:  # 10% chance of error
-        # Undefined variable use
-        return jsonify(user_list)  # This will fail with NameError
-    
     users = User.query.all()
     return jsonify([user.to_dict() for user in users])
 
@@ -149,13 +123,13 @@ def search_user_by_email():
 def get_products():
     limit = request.args.get('limit', type=int)
     
-    # Use the inefficient query function that causes N+1 problem
-    products = get_products_with_category(limit)
+    # Use the efficient query function with joins
+    products = Product.query.options(db.joinedload('category')).limit(limit).all() if limit else Product.query.options(db.joinedload('category')).all()
     
     # Occasional memory leak
     simulate_memory_leak()
     
-    return jsonify(products)
+    return jsonify([p.to_dict() for p in products])
 
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
