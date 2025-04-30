@@ -1,54 +1,36 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from models import Product, Category
 
 db = SQLAlchemy()
 
-# Deliberately inefficient query function that doesn't use joins
-def get_products_with_category(limit=None):
-    from models import Product
-    
-    # This will cause N+1 query problem
-    products = Product.query.limit(limit).all() if limit else Product.query.all()
+# Optimized query function using joins
+def get_products_with_category_optimized(limit=None):
+    query = db.session.query(Product, Category).join(Category, Product.category_id == Category.id)
+    if limit:
+        query = query.limit(limit)
+    products = query.all()
     
     result = []
-    for product in products:
+    for product, category in products:
         product_dict = product.to_dict()
-        # Causes additional query for each product
-        category = product.category
-        if category:
-            product_dict['category_name'] = category.name
-        else:
-            product_dict['category_name'] = None
+        product_dict['category_name'] = category.name
         result.append(product_dict)
     
     return result
 
-# A slow query that doesn't use indexes properly
-def slow_product_search(keyword):
-    from models import Product
-    import time
-    
-    # Simulate slow query processing
-    time.sleep(2)
-    
-    # Inefficient LIKE query without index
+# Optimized query with proper indexing
+def product_search_optimized(keyword):
+    # Make sure there is an index on Product.name and Product.description columns
     products = Product.query.filter(
-        (Product.name.like(f'%{keyword}%')) | 
+        (Product.name.like(f'%{keyword}%')) |
         (Product.description.like(f'%{keyword}%'))
     ).all()
     
     return [p.to_dict() for p in products]
 
-# Missing index on user lookup
-def find_user_by_email(email):
+# Optimized user lookup with indexing
+def find_user_by_email_optimized(email):
     from models import User
+    # Make sure there is an index on User.email column
     return User.query.filter_by(email=email).first()
-
-# Vulnerable to SQL injection (for demonstration only)
-def unsafe_raw_query(user_input):
-    from sqlalchemy import text
-    
-    # WARNING: This is deliberately unsafe!
-    query = text(f"SELECT * FROM product WHERE name LIKE '%{user_input}%'")
-    result = db.session.execute(query)
-    
-    return [dict(row._mapping) for row in result]
